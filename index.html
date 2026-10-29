@@ -151,7 +151,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     <div class="brand"><svg><use href="#eagle"/></svg>Auto Eagle</div>
     <div class="client-tag" id="client-tag"></div>
     <button class="nav" data-view="time"><span id="nav-time-label">Tid</span> <span class="run-dot hidden" id="nav-dot"></span></button>
-    <button class="nav" data-view="cases">Sager</button>
+    <button class="nav" data-view="cases">Projekter</button>
     <button class="nav" data-view="docs">Dokumenter</button>
     <button class="nav owner-only" data-view="ai">Assistent</button>
     <button class="nav owner-only" data-view="clients">Kunder</button>
@@ -171,11 +171,12 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         <button class="btn gold" id="timer-btn">Start timer</button>
         <div class="clock-form row">
           <div class="field"><label for="t-client">Kunde</label><select id="t-client"></select></div>
-          <div class="field"><label for="t-case">Sag</label><select id="t-case"></select></div>
+          <div class="field"><label for="t-case">Projekt</label><select id="t-case"></select></div>
           <div class="field" style="flex:2"><label for="t-desc">Hvad arbejder du på?</label><input id="t-desc" placeholder="Fx gennemgang af tilbudsliste"></div>
         </div>
       </div>
       <div class="stats" id="stats"></div>
+      <div class="table-scroll" style="margin-bottom:22px"><table id="by-case"></table></div>
       <details class="box owner-only" style="margin-bottom:22px">
         <summary style="cursor:pointer;font-weight:600">Registrér tid manuelt</summary>
         <div class="row" style="margin-top:14px">
@@ -183,7 +184,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
           <div class="field"><label for="m-from">Fra</label><input id="m-from" type="time" value="09:00"></div>
           <div class="field"><label for="m-to">Til</label><input id="m-to" type="time" value="10:00"></div>
           <div class="field"><label for="m-client">Kunde</label><select id="m-client"></select></div>
-          <div class="field"><label for="m-case">Sag</label><select id="m-case"></select></div>
+          <div class="field"><label for="m-case">Projekt</label><select id="m-case"></select></div>
         </div>
         <div class="row"><div class="field" style="flex:3"><label for="m-desc">Beskrivelse</label><input id="m-desc"></div>
           <div class="field" style="flex:0"><button class="btn primary" id="m-save">Gem registrering</button></div></div>
@@ -200,9 +201,9 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
     <!-- CASES -->
     <section id="v-cases" class="view hidden">
-      <h2>Sager</h2>
+      <h2>Projekter</h2>
       <details class="box owner-only" style="margin-bottom:22px">
-        <summary style="cursor:pointer;font-weight:600">Opret sag</summary>
+        <summary style="cursor:pointer;font-weight:600">Opret projekt</summary>
         <div class="row" style="margin-top:14px">
           <div class="field" style="flex:3"><label for="c-title">Titel</label><input id="c-title"></div>
           <div class="field"><label for="c-client">Kunde</label><select id="c-client"></select></div>
@@ -212,7 +213,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
           <div class="field"><label for="c-buyer">Ordregiver / modtager</label><input id="c-buyer"></div>
           <div class="field"><label for="c-qd">Spørgefrist</label><input id="c-qd" type="datetime-local"></div>
           <div class="field"><label for="c-td">Tilbudsfrist</label><input id="c-td" type="datetime-local"></div>
-          <div class="field" style="flex:0"><button class="btn primary" id="c-save">Opret sag</button></div>
+          <div class="field" style="flex:0"><button class="btn primary" id="c-save">Opret projekt</button></div>
         </div>
         <div class="err" id="c-err"></div>
       </details>
@@ -225,7 +226,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <div class="box" style="margin-bottom:22px">
         <div class="row">
           <div class="field"><label for="d-client">Kunde</label><select id="d-client"></select></div>
-          <div class="field"><label for="d-case">Sag</label><select id="d-case"></select></div>
+          <div class="field"><label for="d-case">Projekt</label><select id="d-case"></select></div>
           <div class="field" style="flex:2"><label for="d-files">Filer (PDF læses bedst af assistenten)</label><input id="d-files" type="file" multiple></div>
           <div class="field" style="flex:0"><button class="btn primary" id="d-upload">Upload</button></div>
         </div>
@@ -245,10 +246,10 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="convo">
           <div class="row">
             <div class="field"><label for="a-client">Kunde</label><select id="a-client"></select></div>
-            <div class="field"><label for="a-case">Sag</label><select id="a-case"></select></div>
+            <div class="field"><label for="a-case">Projekt</label><select id="a-case"></select></div>
           </div>
           <div class="msgs" id="msgs"><p class="muted">Vælg dokumenter nedenfor og skriv en opgave, fx «Lav en tjekliste over alle mindstekrav» eller «Skriv et høringssvar om prismodellen».</p></div>
-          <div class="field"><label>Læs disse dokumenter med</label><div class="doc-pick" id="a-docs"><span class="muted">Ingen dokumenter på den valgte sag.</span></div></div>
+          <div class="field"><label>Læs disse dokumenter med</label><div class="doc-pick" id="a-docs"><span class="muted">Ingen dokumenter på det valgte projekt.</span></div></div>
           <div class="field"><label for="a-input">Opgave</label><textarea id="a-input" placeholder="Hvad skal assistenten gøre?"></textarea></div>
           <div class="row"><div class="field" style="flex:0"><button class="btn primary" id="a-send">Send til assistent</button></div><div class="err" id="a-err" style="flex:3"></div></div>
         </div>
@@ -355,7 +356,7 @@ function fillClientSelects(){
 }
 function fillCases(cSel, kSel){
   const cid = $(cSel).value; const list = S.cases.filter(k => !cid || k.client_id === cid);
-  $(kSel).innerHTML = '<option value="">(Ingen sag)</option>' + list.map(k => `<option value="${k.id}">${esc(k.title)}</option>`).join("");
+  $(kSel).innerHTML = '<option value="">(Intet projekt)</option>' + list.map(k => `<option value="${k.id}">${esc(k.title)}</option>`).join("");
 }
 
 /* ---------- Timer ---------- */
@@ -379,6 +380,7 @@ $("timer-btn").onclick = async () => {
     await sb.from("time_entries").update({ ended_at: new Date().toISOString(), description: $("t-desc").value || S.running.description, client_id: $("t-client").value || null, case_id: $("t-case").value || null }).eq("id", S.running.id);
     S.running = null; $("t-desc").value = "";
   } else {
+    if ($("t-client").value && !$("t-case").value && !confirm("Intet projekt valgt. Kunden vil se registreringen som «Generelt». Start alligevel?")) { $("timer-btn").disabled = false; return; }
     const { data, error } = await sb.from("time_entries").insert({ client_id: $("t-client").value || null, case_id: $("t-case").value || null, description: $("t-desc").value || null }).select().single();
     if (!error) S.running = data;
   }
@@ -402,16 +404,22 @@ function renderEntries(){
   const total = lastEntries.reduce((a,e) => a + dur(e), 0); const bill = lastEntries.filter(e => e.billable).reduce((a,e) => a + dur(e), 0);
   const value = lastEntries.filter(e => e.billable).reduce((a,e) => { const c = S.clients.find(x => x.id === e.client_id); return a + (c?.hourly_rate ? dur(e)/3600000*c.hourly_rate : 0); }, 0);
   $("stats").innerHTML = `<div><b>${fmtH(total)}</b><span class="muted">timer i perioden</span></div><div><b>${fmtH(bill)}</b><span class="muted">fakturerbare</span></div><div><b>${Math.round(value).toLocaleString("da-DK")} kr.</b><span class="muted">ekskl. moms</span></div>`;
+  const groups = {};
+  for (const e of lastEntries) { const key = e.case_id || "none"; const g = groups[key] ||= { ms:0, kr:0 }; const ms = dur(e); g.ms += ms;
+    const r = S.clients.find(x => x.id === e.client_id)?.hourly_rate; if (e.billable && r) g.kr += ms/3600000*r; }
+  const gk = Object.keys(groups);
+  $("by-case").innerHTML = gk.length ? "<tr><th>Projekt</th><th>Timer</th><th>Beløb</th></tr>" + gk.map(key => { const k = S.cases.find(x => x.id === key);
+    return `<tr><td>${esc(k?.title || "Generelt")}</td><td class="num">${fmtH(groups[key].ms)}</td><td class="num">${Math.round(groups[key].kr).toLocaleString("da-DK")} kr.</td></tr>`; }).join("") : "";
   if (!lastEntries.length) { $("entries").innerHTML = '<tr><td class="muted">Ingen registreringer i perioden. Start timeren ovenfor, eller registrér tid manuelt.</td></tr>'; return; }
   const own = isOwner(); const rateOf = (e) => S.clients.find(x => x.id === e.client_id)?.hourly_rate;
-  let html = "<tr><th>Tid</th><th>Kunde / sag</th><th>Beskrivelse</th><th>Timer</th><th>Beløb</th>" + (own ? "<th>Fakturerbar</th><th></th>" : "") + "</tr>"; let day = "";
+  let html = "<tr><th>Tid</th><th>" + (own ? "Kunde / projekt" : "Projekt") + "</th><th>Beskrivelse</th><th>Timer</th><th>Beløb</th>" + (own ? "<th>Fakturerbar</th><th></th>" : "") + "</tr>"; let day = "";
   for (const e of lastEntries) {
     const d = new Date(e.started_at).toLocaleDateString("da-DK", { weekday:"long", day:"numeric", month:"long" });
     if (d !== day) { day = d; const dayMs = lastEntries.filter(x => new Date(x.started_at).toLocaleDateString("da-DK",{weekday:"long",day:"numeric",month:"long"}) === d).reduce((a,x)=>a+dur(x),0);
       html += `<tr class="day-head"><td colspan="3">${d}</td><td class="num">${fmtH(dayMs)}</td><td colspan="${own ? 3 : 1}"></td></tr>`; }
     const c = S.clients.find(x => x.id === e.client_id); const k = S.cases.find(x => x.id === e.case_id);
     const t = (x) => new Date(x).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit"});
-    html += `<tr><td class="num">${t(e.started_at)}–${e.ended_at ? t(e.ended_at) : "kører"}</td><td>${esc(c?.name || "–")}${k ? `<br><span class="muted">${esc(k.title)}</span>` : ""}</td><td>${esc(e.description || "")}</td><td class="num">${fmtH(dur(e))}</td><td class="num">${e.billable && rateOf(e) ? Math.round(dur(e)/3600000*rateOf(e)).toLocaleString("da-DK") + " kr." : "–"}</td>
+    html += `<tr><td class="num">${t(e.started_at)}–${e.ended_at ? t(e.ended_at) : "kører"}</td><td>${own ? `${esc(c?.name || "–")}${k ? `<br><span class="muted">${esc(k.title)}</span>` : ""}` : esc(k?.title || "Generelt")}</td><td>${esc(e.description || "")}</td><td class="num">${fmtH(dur(e))}</td><td class="num">${e.billable && rateOf(e) ? Math.round(dur(e)/3600000*rateOf(e)).toLocaleString("da-DK") + " kr." : "–"}</td>
       ${own ? `<td><input type="checkbox" ${e.billable ? "checked" : ""} data-bill="${e.id}" aria-label="Fakturerbar"></td><td><button class="btn small danger" data-del="${e.id}">Slet</button></td>` : ""}</tr>`;
   }
   $("entries").innerHTML = html;
@@ -419,7 +427,7 @@ function renderEntries(){
   $("entries").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { if (!confirm("Slet registreringen?")) return; await sb.from("time_entries").delete().eq("id", b.dataset.del); if (S.running?.id === b.dataset.del) { S.running = null; renderTimer(); } loadEntries(); });
 }
 $("csv").onclick = () => {
-  const rows = [["Dato","Start","Slut","Kunde","Sag","Beskrivelse","Timer","Fakturerbar","Timepris","Beløb"]];
+  const rows = [["Dato","Start","Slut","Kunde","Projekt","Beskrivelse","Timer","Fakturerbar","Timepris","Beløb"]];
   for (const e of [...lastEntries].reverse()) { if (!e.ended_at) continue;
     const c = S.clients.find(x => x.id === e.client_id); const k = S.cases.find(x => x.id === e.case_id);
     const h = (new Date(e.ended_at) - new Date(e.started_at))/3600000; const rate = c?.hourly_rate || "";
@@ -431,16 +439,16 @@ $("csv").onclick = () => {
 /* ---------- Cases ---------- */
 function renderCases(){
   const list = S.scopedClient ? S.cases.filter(k => k.client_id === S.scopedClient.id) : S.cases;
-  if (!list.length) { $("cases").innerHTML = '<tr><td class="muted">Ingen sager endnu.</td></tr>'; return; }
+  if (!list.length) { $("cases").innerHTML = '<tr><td class="muted">Ingen projekter endnu.</td></tr>'; return; }
   const dt = (x) => x ? new Date(x).toLocaleString("da-DK",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "–";
-  $("cases").innerHTML = "<tr><th>Sag</th><th>Kunde</th><th>Status</th><th>Spørgefrist</th><th>Tilbudsfrist</th></tr>" + list.map(k =>
+  $("cases").innerHTML = "<tr><th>Projekt</th><th>Kunde</th><th>Status</th><th>Spørgefrist</th><th>Tilbudsfrist</th></tr>" + list.map(k =>
     `<tr><td><span class="pill ${k.kind}">${esc(k.kind)}</span> ${esc(k.title)}${k.buyer ? `<br><span class="muted">${esc(k.buyer)}</span>` : ""}</td><td>${esc(k.clients?.name || "")}</td><td>${esc(k.status)}</td><td class="num">${dt(k.question_deadline)}</td><td class="num">${dt(k.tender_deadline)}</td></tr>`).join("");
 }
 $("c-save").onclick = async () => {
   if (!$("c-title").value || !$("c-client").value) { $("c-err").textContent = "Titel og kunde skal udfyldes."; return; }
   const { error } = await sb.from("cases").insert({ title: $("c-title").value, client_id: $("c-client").value, kind: $("c-kind").value, buyer: $("c-buyer").value || null,
     question_deadline: $("c-qd").value ? new Date($("c-qd").value).toISOString() : null, tender_deadline: $("c-td").value ? new Date($("c-td").value).toISOString() : null });
-  $("c-err").textContent = error ? error.message : "Sagen er oprettet."; if (!error) { $("c-title").value = ""; await loadCases(); fillClientSelects(); }
+  $("c-err").textContent = error ? error.message : "Projektet er oprettet."; if (!error) { $("c-title").value = ""; await loadCases(); fillClientSelects(); }
 };
 
 /* ---------- Clients ---------- */
@@ -461,7 +469,7 @@ function docsFor(cid, kid){ return S.docs.filter(d => (!cid || d.client_id === c
 function renderDocs(){
   const list = docsFor($("d-client").value || S.scopedClient?.id, $("d-case").value);
   if (!list.length) { $("docs").innerHTML = '<tr><td class="muted">Ingen dokumenter her endnu. Upload udbudsmateriale ovenfor.</td></tr>'; return; }
-  $("docs").innerHTML = "<tr><th>Dokument</th><th>Sag</th><th>Størrelse</th><th>Uploadet</th><th></th></tr>" + list.map(d => {
+  $("docs").innerHTML = "<tr><th>Dokument</th><th>Projekt</th><th>Størrelse</th><th>Uploadet</th><th></th></tr>" + list.map(d => {
     const k = S.cases.find(x => x.id === d.case_id);
     return `<tr><td>${esc(d.name)}</td><td>${esc(k?.title || "–")}</td><td class="num">${d.size_bytes ? Math.ceil(d.size_bytes/1024).toLocaleString("da-DK") + " KB" : ""}</td><td class="num">${new Date(d.created_at).toLocaleDateString("da-DK")}</td>
       <td><button class="btn small" data-open="${d.id}">Åbn</button>${isOwner() ? ` <button class="btn small danger" data-rm="${d.id}">Slet</button>` : ""}</td></tr>`; }).join("");
@@ -489,7 +497,7 @@ $("d-upload").onclick = async () => {
 /* ---------- Assistant ---------- */
 function renderDocPick(){
   const list = docsFor($("a-client").value || S.scopedClient?.id, $("a-case").value);
-  $("a-docs").innerHTML = list.length ? list.map(d => `<label><input type="checkbox" value="${d.id}">${esc(d.name)}</label>`).join("") : '<span class="muted">Ingen dokumenter på den valgte sag.</span>';
+  $("a-docs").innerHTML = list.length ? list.map(d => `<label><input type="checkbox" value="${d.id}">${esc(d.name)}</label>`).join("") : '<span class="muted">Ingen dokumenter på det valgte projekt.</span>';
 }
 async function loadThreads(){
   let q = sb.from("ai_threads").select("*").order("created_at", { ascending:false }).limit(50);
