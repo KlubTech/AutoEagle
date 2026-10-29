@@ -150,10 +150,10 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   <nav>
     <div class="brand"><svg><use href="#eagle"/></svg>Auto Eagle</div>
     <div class="client-tag" id="client-tag"></div>
-    <button class="nav owner-only" data-view="time">Tid <span class="run-dot hidden" id="nav-dot"></span></button>
+    <button class="nav" data-view="time"><span id="nav-time-label">Tid</span> <span class="run-dot hidden" id="nav-dot"></span></button>
     <button class="nav" data-view="cases">Sager</button>
     <button class="nav" data-view="docs">Dokumenter</button>
-    <button class="nav" data-view="ai">Assistent</button>
+    <button class="nav owner-only" data-view="ai">Assistent</button>
     <button class="nav owner-only" data-view="clients">Kunder</button>
     <div class="spacer"></div>
     <div class="me" id="me"></div>
@@ -162,8 +162,8 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   <main>
     <!-- TIME -->
     <section id="v-time" class="view">
-      <h2>Tid</h2>
-      <div class="clock-wrap" id="clock-wrap">
+      <h2 id="time-title">Tid</h2>
+      <div class="clock-wrap owner-only" id="clock-wrap">
         <div>
           <div class="clock" id="clock">0:00:00</div>
           <div class="clock-meta" id="clock-meta">Ingen timer kører.</div>
@@ -176,7 +176,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         </div>
       </div>
       <div class="stats" id="stats"></div>
-      <details class="box" style="margin-bottom:22px">
+      <details class="box owner-only" style="margin-bottom:22px">
         <summary style="cursor:pointer;font-weight:600">Registrér tid manuelt</summary>
         <div class="row" style="margin-top:14px">
           <div class="field"><label for="m-date">Dato</label><input id="m-date" type="date"></div>
@@ -324,8 +324,10 @@ async function boot(user){
   fillClientSelects(); 
   const today = new Date(); const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay()+6)%7));
   $("f-from").value = isoDate(monday); $("f-to").value = isoDate(today); $("m-date").value = isoDate(today);
-  if (isOwner()) { await loadRunning(); await loadEntries(); setInterval(tick, 1000); }
-  show(isOwner() ? "time" : "cases");
+  if (!isOwner()) { $("nav-time-label").textContent = "Tidsforbrug"; $("time-title").textContent = "Tidsforbrug"; }
+  await loadEntries();
+  if (isOwner()) { await loadRunning(); setInterval(tick, 1000); }
+  show("time");
 }
 document.querySelectorAll("nav button[data-view]").forEach(b => b.onclick = () => show(b.dataset.view));
 function show(v){
@@ -399,17 +401,18 @@ function renderEntries(){
   const dur = (e) => (e.ended_at ? new Date(e.ended_at) : new Date()) - new Date(e.started_at);
   const total = lastEntries.reduce((a,e) => a + dur(e), 0); const bill = lastEntries.filter(e => e.billable).reduce((a,e) => a + dur(e), 0);
   const value = lastEntries.filter(e => e.billable).reduce((a,e) => { const c = S.clients.find(x => x.id === e.client_id); return a + (c?.hourly_rate ? dur(e)/3600000*c.hourly_rate : 0); }, 0);
-  $("stats").innerHTML = `<div><b>${fmtH(total)}</b><span class="muted">timer i perioden</span></div><div><b>${fmtH(bill)}</b><span class="muted">fakturerbare</span></div><div><b>${Math.round(value).toLocaleString("da-DK")} kr.</b><span class="muted">efter timepris</span></div>`;
+  $("stats").innerHTML = `<div><b>${fmtH(total)}</b><span class="muted">timer i perioden</span></div><div><b>${fmtH(bill)}</b><span class="muted">fakturerbare</span></div><div><b>${Math.round(value).toLocaleString("da-DK")} kr.</b><span class="muted">ekskl. moms</span></div>`;
   if (!lastEntries.length) { $("entries").innerHTML = '<tr><td class="muted">Ingen registreringer i perioden. Start timeren ovenfor, eller registrér tid manuelt.</td></tr>'; return; }
-  let html = "<tr><th>Tid</th><th>Kunde / sag</th><th>Beskrivelse</th><th>Timer</th><th>Fakturerbar</th><th></th></tr>"; let day = "";
+  const own = isOwner(); const rateOf = (e) => S.clients.find(x => x.id === e.client_id)?.hourly_rate;
+  let html = "<tr><th>Tid</th><th>Kunde / sag</th><th>Beskrivelse</th><th>Timer</th><th>Beløb</th>" + (own ? "<th>Fakturerbar</th><th></th>" : "") + "</tr>"; let day = "";
   for (const e of lastEntries) {
     const d = new Date(e.started_at).toLocaleDateString("da-DK", { weekday:"long", day:"numeric", month:"long" });
     if (d !== day) { day = d; const dayMs = lastEntries.filter(x => new Date(x.started_at).toLocaleDateString("da-DK",{weekday:"long",day:"numeric",month:"long"}) === d).reduce((a,x)=>a+dur(x),0);
-      html += `<tr class="day-head"><td colspan="3">${d}</td><td class="num">${fmtH(dayMs)}</td><td colspan="2"></td></tr>`; }
+      html += `<tr class="day-head"><td colspan="3">${d}</td><td class="num">${fmtH(dayMs)}</td><td colspan="${own ? 3 : 1}"></td></tr>`; }
     const c = S.clients.find(x => x.id === e.client_id); const k = S.cases.find(x => x.id === e.case_id);
     const t = (x) => new Date(x).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit"});
-    html += `<tr><td class="num">${t(e.started_at)}–${e.ended_at ? t(e.ended_at) : "kører"}</td><td>${esc(c?.name || "–")}${k ? `<br><span class="muted">${esc(k.title)}</span>` : ""}</td><td>${esc(e.description || "")}</td><td class="num">${fmtH(dur(e))}</td>
-      <td><input type="checkbox" ${e.billable ? "checked" : ""} data-bill="${e.id}" aria-label="Fakturerbar"></td><td><button class="btn small danger" data-del="${e.id}">Slet</button></td></tr>`;
+    html += `<tr><td class="num">${t(e.started_at)}–${e.ended_at ? t(e.ended_at) : "kører"}</td><td>${esc(c?.name || "–")}${k ? `<br><span class="muted">${esc(k.title)}</span>` : ""}</td><td>${esc(e.description || "")}</td><td class="num">${fmtH(dur(e))}</td><td class="num">${e.billable && rateOf(e) ? Math.round(dur(e)/3600000*rateOf(e)).toLocaleString("da-DK") + " kr." : "–"}</td>
+      ${own ? `<td><input type="checkbox" ${e.billable ? "checked" : ""} data-bill="${e.id}" aria-label="Fakturerbar"></td><td><button class="btn small danger" data-del="${e.id}">Slet</button></td>` : ""}</tr>`;
   }
   $("entries").innerHTML = html;
   $("entries").querySelectorAll("[data-bill]").forEach(cb => cb.onchange = async () => { await sb.from("time_entries").update({ billable: cb.checked }).eq("id", cb.dataset.bill); loadEntries(); });
