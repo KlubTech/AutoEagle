@@ -194,6 +194,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="field"><label for="f-from">Periode fra</label><input id="f-from" type="date"></div>
         <div class="field"><label for="f-to">til</label><input id="f-to" type="date"></div>
         <div class="field"><label for="f-client">Kunde</label><select id="f-client"></select></div>
+        <div class="field"><label for="f-case">Projekt</label><select id="f-case"></select></div>
         <div class="field" style="flex:0"><button class="btn" id="csv">Eksportér CSV</button></div>
       </div>
       <div class="table-scroll"><table id="entries"></table></div>
@@ -320,8 +321,10 @@ async function boot(user){
   $("me").textContent = S.profile.full_name || user.email;
   document.querySelectorAll(".owner-only").forEach(el => el.classList.toggle("hidden", !isOwner()));
   await loadClients(); await loadCases(); await loadDocs();
-  if (S.subSlug) { S.scopedClient = S.clients.find(c => c.slug === S.subSlug) || null;
-    $("client-tag").textContent = S.scopedClient ? S.scopedClient.name : `Ukendt kunde: ${S.subSlug}`; }
+  if (S.subSlug) S.scopedClient = S.clients.find(c => c.slug === S.subSlug) || null;
+  if (!S.scopedClient && !isOwner() && S.clients.length === 1) S.scopedClient = S.clients[0];
+  if (S.scopedClient) $("client-tag").textContent = S.scopedClient.name;
+  else if (S.subSlug) $("client-tag").textContent = `Ukendt kunde: ${S.subSlug}`;
   fillClientSelects(); 
   const today = new Date(); const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay()+6)%7));
   $("f-from").value = isoDate(monday); $("f-to").value = isoDate(today); $("m-date").value = isoDate(today);
@@ -347,12 +350,15 @@ function fillClientSelects(){
   const opts = (all) => (all ? '<option value="">Alle kunder</option>' : '<option value="">(Ingen kunde)</option>') + visibleClients().map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
   ["t-client","m-client","c-client","d-client","a-client"].forEach(id => { $(id).innerHTML = opts(false); if (S.scopedClient || visibleClients().length === 1) $(id).value = visibleClients()[0]?.id || ""; });
   $("f-client").innerHTML = opts(true);
+  if (S.scopedClient) ["t-client","m-client","c-client","d-client","a-client","f-client"].forEach(id => { $(id).value = S.scopedClient.id; $(id).closest(".field").classList.add("hidden"); });
+  const fillFCase = () => { const cid = $("f-client").value; $("f-case").innerHTML = '<option value="">Alle projekter</option>' + S.cases.filter(k => !cid || k.client_id === cid).map(k => `<option value="${k.id}">${esc(k.title)}</option>`).join(""); };
+  fillFCase(); $("f-case").onchange = loadEntries;
   [["t-client","t-case"],["m-client","m-case"],["d-client","d-case"],["a-client","a-case"]].forEach(([c,k]) => {
     $(c).onchange = () => { fillCases(c,k); if (c === "d-client") renderDocs(); if (c === "a-client") { renderDocPick(); loadThreads(); } };
     fillCases(c,k);
   });
   $("d-case").onchange = renderDocs; $("a-case").onchange = () => { renderDocPick(); loadThreads(); };
-  $("f-client").onchange = loadEntries; $("f-from").onchange = loadEntries; $("f-to").onchange = loadEntries;
+  $("f-client").onchange = () => { fillFCase(); loadEntries(); }; $("f-from").onchange = loadEntries; $("f-to").onchange = loadEntries;
 }
 function fillCases(cSel, kSel){
   const cid = $(cSel).value; const list = S.cases.filter(k => !cid || k.client_id === cid);
@@ -397,20 +403,21 @@ async function loadEntries(){
   const from = new Date($("f-from").value + "T00:00"); const to = new Date($("f-to").value + "T23:59:59");
   let q = sb.from("time_entries").select("*").gte("started_at", from.toISOString()).lte("started_at", to.toISOString()).order("started_at", { ascending:false });
   if ($("f-client").value) q = q.eq("client_id", $("f-client").value);
+  if ($("f-case").value) q = q.eq("case_id", $("f-case").value);
   const { data } = await q; lastEntries = data || []; renderEntries();
 }
 function renderEntries(){
   const dur = (e) => (e.ended_at ? new Date(e.ended_at) : new Date()) - new Date(e.started_at);
   const total = lastEntries.reduce((a,e) => a + dur(e), 0); const bill = lastEntries.filter(e => e.billable).reduce((a,e) => a + dur(e), 0);
   const value = lastEntries.filter(e => e.billable).reduce((a,e) => { const c = S.clients.find(x => x.id === e.client_id); return a + (c?.hourly_rate ? dur(e)/3600000*c.hourly_rate : 0); }, 0);
-  $("stats").innerHTML = `<div><b>${fmtH(total)}</b><span class="muted">timer i perioden</span></div><div><b>${fmtH(bill)}</b><span class="muted">fakturerbare</span></div><div><b>${Math.round(value).toLocaleString("da-DK")} kr.</b><span class="muted">ekskl. moms</span></div>`;
+  $("stats").innerHTML = `<div><b>${fmtH(total)}</b><span class="muted">timer i perioden</span></div>` + (isOwner() ? `<div><b>${fmtH(bill)}</b><span class="muted">fakturerbare</span></div>` : "") + `<div><b>${Math.round(value).toLocaleString("da-DK")} kr.</b><span class="muted">ekskl. moms</span></div>`;
   const groups = {};
   for (const e of lastEntries) { const key = e.case_id || "none"; const g = groups[key] ||= { ms:0, kr:0 }; const ms = dur(e); g.ms += ms;
     const r = S.clients.find(x => x.id === e.client_id)?.hourly_rate; if (e.billable && r) g.kr += ms/3600000*r; }
   const gk = Object.keys(groups);
   $("by-case").innerHTML = gk.length ? "<tr><th>Projekt</th><th>Timer</th><th>Beløb</th></tr>" + gk.map(key => { const k = S.cases.find(x => x.id === key);
     return `<tr><td>${esc(k?.title || "Generelt")}</td><td class="num">${fmtH(groups[key].ms)}</td><td class="num">${Math.round(groups[key].kr).toLocaleString("da-DK")} kr.</td></tr>`; }).join("") : "";
-  if (!lastEntries.length) { $("entries").innerHTML = '<tr><td class="muted">Ingen registreringer i perioden. Start timeren ovenfor, eller registrér tid manuelt.</td></tr>'; return; }
+  if (!lastEntries.length) { $("entries").innerHTML = `<tr><td class="muted">${isOwner() ? "Ingen registreringer i perioden. Start timeren ovenfor, eller registrér tid manuelt." : "Ingen registreringer i den valgte periode."}</td></tr>`; return; }
   const own = isOwner(); const rateOf = (e) => S.clients.find(x => x.id === e.client_id)?.hourly_rate;
   let html = "<tr><th>Tid</th><th>" + (own ? "Kunde / projekt" : "Projekt") + "</th><th>Beskrivelse</th><th>Timer</th><th>Beløb</th>" + (own ? "<th>Fakturerbar</th><th></th>" : "") + "</tr>"; let day = "";
   for (const e of lastEntries) {
@@ -454,8 +461,20 @@ $("c-save").onclick = async () => {
 /* ---------- Clients ---------- */
 function renderClients(){
   if (!isOwner()) return;
-  $("clients").innerHTML = "<tr><th>Kunde</th><th>Adresse</th><th>Timepris</th></tr>" + S.clients.map(c =>
-    `<tr><td>${esc(c.name)}</td><td>${esc(c.slug)}.autoeagle.dk</td><td class="num">${c.hourly_rate ? Number(c.hourly_rate).toLocaleString("da-DK") + " kr." : "<span class='muted'>ikke sat</span>"}</td></tr>`).join("");
+  $("clients").innerHTML = "<tr><th>Kunde</th><th>Subdomæne</th><th>Timepris (kr. ekskl. moms)</th><th></th></tr>" + S.clients.map(c =>
+    `<tr data-id="${c.id}"><td><input data-f="name" value="${esc(c.name)}" aria-label="Kundenavn"></td>
+      <td><div class="row" style="flex-wrap:nowrap;gap:6px;align-items:center"><input data-f="slug" value="${esc(c.slug)}" aria-label="Subdomæne" style="min-width:0"><span class="muted" style="flex:0">.autoeagle.dk</span></div></td>
+      <td><input data-f="hourly_rate" type="number" step="50" min="0" value="${c.hourly_rate ?? ""}" aria-label="Timepris"></td>
+      <td><button class="btn small primary" data-save="${c.id}">Gem</button> <span class="muted" data-msg="${c.id}"></span></td></tr>`).join("");
+  $("clients").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
+    const tr = b.closest("tr"); const v = (f) => tr.querySelector(`[data-f="${f}"]`).value.trim();
+    const slug = v("slug").toLowerCase(); const msg = tr.querySelector("[data-msg]");
+    if (!v("name") || !/^[a-z0-9-]+$/.test(slug)) { msg.textContent = "Navn og subdomæne (a-z, 0-9, -) skal udfyldes."; return; }
+    const { error } = await sb.from("clients").update({ name: v("name"), slug, hourly_rate: v("hourly_rate") === "" ? null : Number(v("hourly_rate")) }).eq("id", b.dataset.save);
+    if (error) { msg.textContent = error.message; return; }
+    await loadClients(); fillClientSelects(); if (lastEntries.length) renderEntries();
+    const m = $("clients").querySelector(`[data-msg="${b.dataset.save}"]`); if (m) m.textContent = "Gemt.";
+  });
 }
 $("k-save").onclick = async () => {
   const slug = $("k-slug").value.trim().toLowerCase();
