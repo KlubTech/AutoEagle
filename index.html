@@ -120,6 +120,37 @@ details.sources summary{cursor:pointer;font-weight:600}
 .doc-pick .tag{font-size:11px;color:var(--moss);font-weight:600}
 td.actions{white-space:nowrap;text-align:right}
 td.actions .btn+.btn{margin-left:28px}
+.doc-list{display:flex;flex-direction:column;gap:6px}
+.doc-row{background:var(--panel);border:1px solid var(--line);border-radius:9px}
+.doc-row>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;flex-wrap:wrap}
+.doc-row>summary::-webkit-details-marker{display:none}
+.doc-row>summary .caret{transition:transform .15s;color:var(--muted);width:12px}
+.doc-row[open]>summary .caret{transform:rotate(90deg)}
+.doc-row .dname{flex:1;min-width:180px;font-weight:600}
+.doc-row .dmeta{font-size:12px;color:var(--muted);white-space:nowrap}
+.doc-row .dacts{display:flex;gap:6px;margin-left:auto}
+.doc-row .dacts .danger{margin-left:22px}
+.doc-row .dbody{padding:2px 16px 14px 40px;font-size:14px}
+.doc-row .dbody ul{margin:6px 0 8px;padding-left:20px}
+.doc-row.old{opacity:.65}
+.badge{font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;white-space:nowrap;border:1px solid var(--line);color:var(--muted)}
+.badge.read{border-color:var(--moss);color:var(--moss)}
+.badge.submit{border-color:var(--gold);color:var(--gold)}
+.badge.used{background:var(--moss);border-color:var(--moss);color:#fff}
+.group-title{font-size:13px;color:var(--muted);font-weight:600;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.04em}
+.pick-list .doc-row>summary{padding:6px 10px}
+.pick-list .doc-row .dname{font-weight:500;font-size:14px}
+.pick-list input[type=checkbox]{width:auto;margin:0}
+.progress{height:12px;border-radius:99px;background:var(--line);overflow:hidden;margin:8px 0 4px}
+.progress>div{height:100%;background:var(--moss);transition:width .3s}
+.dl-row{display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:start;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px 14px}
+.dl-row.klar{border-color:var(--moss)}
+.dl-row.ikke_relevant{opacity:.55}
+.dl-row .t{font-weight:600}
+.dl-row .d{font-size:14px;color:var(--muted);margin-top:2px}
+.dl-row .file{font-size:13px;margin-top:6px}
+.dl-status{font-weight:600}
+@media (max-width:820px){ .dl-row{grid-template-columns:1fr} .doc-row .dbody{padding-left:16px} }
 .docs-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px}
 @media (max-width:820px){
   #docs th:nth-child(2),#docs td:nth-child(2),#docs th:nth-child(3),#docs td:nth-child(3){display:none}
@@ -171,6 +202,7 @@ td.actions .btn+.btn{margin-left:28px}
     <button class="nav" data-view="time"><span id="nav-time-label">Tid</span> <span class="run-dot hidden" id="nav-dot"></span></button>
     <button class="nav" data-view="cases">Projekter</button>
     <button class="nav" data-view="docs">Dokumenter</button>
+    <button class="nav" data-view="deliver">Aflevering</button>
     <button class="nav owner-only" data-view="ai">Assistent</button>
     <button class="nav owner-only" data-view="clients">Kunder</button>
     <div class="spacer"></div>
@@ -251,8 +283,29 @@ td.actions .btn+.btn{margin-left:28px}
         </div>
         <div class="err" id="d-err"></div>
       </div>
-      <div class="docs-head"><span class="muted" id="docs-count"></span><button class="btn small owner-only" id="trash-toggle">Vis papirkurv</button></div>
-      <div class="table-scroll"><table id="docs"></table></div>
+      <div class="docs-head"><span class="muted" id="docs-count"></span><span><button class="btn small owner-only" id="read-all">Lad robotten læse ulæste</button> <button class="btn small owner-only" id="trash-toggle">Vis papirkurv</button></span></div>
+      <div class="err" id="read-status"></div>
+      <div id="docs"></div>
+    </section>
+
+    <!-- AFLEVERING -->
+    <section id="v-deliver" class="view hidden">
+      <h2>Aflevering</h2>
+      <div class="row">
+        <div class="field"><label for="v-client">Kunde</label><select id="v-client"></select></div>
+        <div class="field"><label for="v-case">Projekt</label><select id="v-case"></select></div>
+      </div>
+      <div class="box" style="margin-bottom:18px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><b id="dl-pct" style="font-size:28px">0 %</b><span class="muted" id="dl-sum"></span></div>
+        <div class="progress"><div id="dl-bar" style="width:0%"></div></div>
+        <div class="row owner-only" style="margin-top:12px">
+          <div class="field" style="flex:0"><button class="btn gold" id="dl-gen">Lav liste med robotten</button></div>
+          <div class="field" style="flex:3"><input id="dl-new" placeholder="Tilføj punkt selv, fx «Tilbudsbrev»"></div>
+          <div class="field" style="flex:0"><button class="btn" id="dl-add">Tilføj</button></div>
+        </div>
+        <div class="err" id="dl-err"></div>
+      </div>
+      <div class="doc-list" id="dl-list"></div>
     </section>
 
     <!-- AI -->
@@ -269,7 +322,7 @@ td.actions .btn+.btn{margin-left:28px}
             <div class="field"><label for="a-case">Projekt</label><select id="a-case"></select></div>
           </div>
           <div class="msgs" id="msgs"><p class="muted">Vælg dokumenter nedenfor og skriv en opgave, fx «Lav en tjekliste over alle mindstekrav» eller «Skriv et høringssvar om prismodellen».</p></div>
-          <div class="field"><label>Læs disse dokumenter med</label><div class="pick-tools"><button class="btn small" type="button" id="pick-all">Alle</button><button class="btn small" type="button" id="pick-cur">Kun gældende</button><button class="btn small" type="button" id="pick-none">Ingen</button><span class="muted" id="pick-count" style="font-size:13px;align-self:center"></span></div><div class="doc-pick" id="a-docs"><span class="muted">Ingen dokumenter på det valgte projekt.</span></div></div>
+          <div class="field"><label>Læs disse dokumenter med</label><div class="pick-tools"><button class="btn small" type="button" id="pick-all">Alle</button><button class="btn small" type="button" id="pick-cur">Kun gældende</button><button class="btn small" type="button" id="pick-none">Ingen</button><span class="muted" id="pick-count" style="font-size:13px;align-self:center"></span></div><div class="pick-list" id="a-docs"><span class="muted">Ingen dokumenter på det valgte projekt.</span></div></div>
           <div class="field"><label for="a-input">Opgave</label><textarea id="a-input" placeholder="Hvad skal assistenten gøre?"></textarea></div>
           <div class="row"><div class="field" style="flex:0"><button class="btn primary" id="a-send">Send til assistent</button></div><div class="err" id="a-err" style="flex:3"></div></div>
         </div>
@@ -357,6 +410,7 @@ function show(v){
   document.querySelectorAll(".view").forEach(s => s.classList.toggle("hidden", s.id !== "v-" + v));
   document.querySelectorAll("nav button[data-view]").forEach(b => b.dataset.view === v ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current"));
   if (v === "ai") { loadThreads(); renderDocPick(); }
+  if (v === "deliver") loadDeliverables();
 }
 
 /* ---------- Data ---------- */
@@ -367,9 +421,9 @@ const visibleClients = () => S.scopedClient ? [S.scopedClient] : S.clients;
 
 function fillClientSelects(){
   const opts = (all) => (all ? '<option value="">Alle kunder</option>' : '<option value="">(Ingen kunde)</option>') + visibleClients().map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
-  ["t-client","m-client","c-client","d-client","a-client"].forEach(id => { $(id).innerHTML = opts(false); if (S.scopedClient || visibleClients().length === 1) $(id).value = visibleClients()[0]?.id || ""; });
+  ["t-client","m-client","c-client","d-client","a-client","v-client"].forEach(id => { $(id).innerHTML = opts(false); if (S.scopedClient || visibleClients().length === 1) $(id).value = visibleClients()[0]?.id || ""; });
   $("f-client").innerHTML = opts(true);
-  if (S.scopedClient) ["t-client","m-client","c-client","d-client","a-client","f-client"].forEach(id => { $(id).value = S.scopedClient.id; $(id).closest(".field").classList.add("hidden"); });
+  if (S.scopedClient) ["t-client","m-client","c-client","d-client","a-client","f-client","v-client"].forEach(id => { $(id).value = S.scopedClient.id; $(id).closest(".field").classList.add("hidden"); });
   const fillFCase = () => { const cid = $("f-client").value; $("f-case").innerHTML = '<option value="">Alle projekter</option>' + S.cases.filter(k => !cid || k.client_id === cid).map(k => `<option value="${k.id}">${esc(k.title)}</option>`).join(""); };
   fillFCase(); $("f-case").onchange = loadEntries;
   [["t-client","t-case"],["m-client","m-case"],["d-client","d-case"],["a-client","a-case"]].forEach(([c,k]) => {
@@ -377,6 +431,9 @@ function fillClientSelects(){
     fillCases(c,k);
   });
   $("d-case").onchange = renderDocs; $("a-case").onchange = () => { renderDocPick(); loadThreads(); };
+  const fillVCase = () => { const cid = $("v-client").value; const l = S.cases.filter(k => !cid || k.client_id === cid); const cur = $("v-case").value;
+    $("v-case").innerHTML = l.map(k => `<option value="${k.id}">${esc(k.title)}</option>`).join("") || '<option value="">(Ingen projekter)</option>'; if (l.some(k => k.id === cur)) $("v-case").value = cur; };
+  fillVCase(); $("v-client").onchange = () => { fillVCase(); loadDeliverables(); }; $("v-case").onchange = loadDeliverables;
   $("f-client").onchange = () => { fillFCase(); loadEntries(); }; $("f-from").onchange = loadEntries; $("f-to").onchange = loadEntries;
 }
 function fillCases(cSel, kSel){
@@ -514,27 +571,76 @@ async function openDoc(id){
   if (error || !data) { if (w) w.close(); alert("Filen kunne ikke åbnes: " + (error?.message || "ukendt fejl")); return; }
   if (w) w.location.href = data.signedUrl; else location.href = data.signedUrl;
 }
+const fmtDate = (x) => new Date(x).toLocaleDateString("da-DK");
+function summaryHtml(d){
+  const s = d.summary;
+  if (!s) return `<p class="muted">Robotten har ikke læst filen endnu.${isOwner() ? " Klik «Læs» for at få de vigtigste punkter." : ""}</p>`;
+  const li = (a) => (a || []).filter(Boolean).map(x => `<li>${esc(x)}</li>`).join("");
+  return `${s.summary ? `<p>${esc(s.summary)}</p>` : ""}
+    ${s.key_points?.length ? `<b>Vigtigste punkter</b><ul>${li(s.key_points)}</ul>` : ""}
+    ${s.deadlines?.length ? `<b>Frister</b><ul>${li(s.deadlines)}</ul>` : ""}
+    ${s.must_submit && s.must_submit !== "nej" ? `<p><span class="badge submit">Skal afleveres${s.must_submit === "betinget" ? " (betinget)" : ""}</span> ${esc(s.submit_note || "")}</p>` : ""}
+    <p class="muted" style="font-size:12px">Læst af robotten ${d.summary_at ? fmtDate(d.summary_at) : ""}${s.pages ? ` · ${s.pages} sider` : ""}</p>`;
+}
+function docRow(d, { pick = false, checked = false } = {}){
+  const k = S.cases.find(x => x.id === d.case_id); const s = d.summary;
+  const status = s ? `<span class="badge read">✓ Læst</span>` : `<span class="badge">Ikke læst</span>`;
+  const used = pick && S.threadRead.has(d.id) ? ` <span class="badge used">Brugt i samtalen</span>` : "";
+  const submit = s?.must_submit === "ja" ? ` <span class="badge submit">Afleveres</span>` : "";
+  const acts = pick ? "" : (showTrash
+    ? `<button class="btn small" data-restore="${d.id}">Gendan</button><button class="btn small danger" data-purge="${d.id}">Slet permanent</button>`
+    : `<button class="btn small" data-open="${d.id}">Åbn</button>${isOwner() ? `<button class="btn small" data-read="${d.id}">${s ? "Læs igen" : "Læs"}</button><button class="btn small danger" data-rm="${d.id}" title="Flyt til papirkurv">Slet</button>` : ""}`);
+  return `<details class="doc-row ${isOld(d) ? "old" : ""}" data-id="${d.id}"><summary>
+      ${pick ? `<input type="checkbox" value="${d.id}" ${checked ? "checked" : ""} aria-label="Send ${esc(d.name)} med">` : ""}<span class="caret">▸</span>
+      <span class="dname">${esc(d.name)}</span>${status}${submit}${used}
+      ${pick ? "" : `<span class="dmeta">${s?.type ? esc(s.type) + " · " : ""}${esc(k?.title || "Intet projekt")} · ${fmtDate(showTrash ? d.deleted_at : d.created_at)}</span>`}
+      ${acts ? `<span class="dacts">${acts}</span>` : ""}
+    </summary><div class="dbody">${summaryHtml(d)}</div></details>`;
+}
+function groupHtml(list, opt){
+  const mat = list.filter(d => d.category !== "aflevering" && !isOld(d)), aff = list.filter(d => d.category === "aflevering"), old = list.filter(d => d.category !== "aflevering" && isOld(d));
+  const g = (t, l) => l.length ? `<div class="group-title">${t} (${l.length})</div><div class="doc-list">${l.map(d => docRow(d, { ...opt, checked: opt?.checked?.has(d.id) })).join("")}</div>` : "";
+  return g("Udbudsmateriale", mat) + g("Afleveringsfiler", aff) + g("Ikke gældende versioner", old);
+}
 function renderDocs(){
   const cid = $("d-client").value || S.scopedClient?.id; const kid = $("d-case").value;
   const list = docsFor(cid, kid, showTrash);
-  const trashN = isOwner() ? docsFor(cid, kid, true).length : 0;
-  $("docs-count").textContent = showTrash ? `Papirkurv: ${list.length} dokument(er). Filerne er ikke slettet endnu.` : `${list.length} dokument(er)` + (trashN ? ` · ${trashN} i papirkurven` : "");
-  if (!list.length) { $("docs").innerHTML = `<tr><td class="muted">${showTrash ? "Papirkurven er tom." : "Ingen dokumenter her endnu. Upload udbudsmateriale ovenfor."}</td></tr>`; return; }
-  $("docs").innerHTML = "<tr><th>Dokument</th><th>Projekt</th><th>Størrelse</th><th>" + (showTrash ? "Slettet" : "Uploadet") + "</th><th></th></tr>" + list.map(d => {
-    const k = S.cases.find(x => x.id === d.case_id);
-    const acts = showTrash
-      ? `<button class="btn small" data-restore="${d.id}">Gendan</button><button class="btn small danger" data-purge="${d.id}">Slet permanent</button>`
-      : `<button class="btn small" data-open="${d.id}">Åbn</button>` + (isOwner() ? `<button class="btn small danger" data-rm="${d.id}" title="Flyt til papirkurv">Slet</button>` : "");
-    return `<tr><td>${esc(d.name)}</td><td>${esc(k?.title || "–")}</td><td class="num">${d.size_bytes ? Math.ceil(d.size_bytes/1024).toLocaleString("da-DK") + " KB" : ""}</td><td class="num">${new Date(showTrash ? d.deleted_at : d.created_at).toLocaleDateString("da-DK")}</td><td class="actions">${acts}</td></tr>`; }).join("");
-  $("docs").querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDoc(b.dataset.open));
-  $("docs").querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => { const d = S.docs.find(x => x.id === b.dataset.rm);
+  const trashN = isOwner() ? docsFor(cid, kid, true).length : 0; const unread = list.filter(d => !d.summary && !isOld(d)).length;
+  $("docs-count").textContent = showTrash ? `Papirkurv: ${list.length} dokument(er). Filerne er ikke slettet endnu.` : `${list.length} dokument(er) · ${list.length - list.filter(d => !d.summary).length} læst af robotten` + (trashN ? ` · ${trashN} i papirkurven` : "");
+  $("read-all").textContent = `Lad robotten læse ulæste (${unread})`; $("read-all").disabled = !unread || showTrash;
+  if (!list.length) { $("docs").innerHTML = `<p class="muted">${showTrash ? "Papirkurven er tom." : "Ingen dokumenter her endnu. Upload udbudsmateriale ovenfor."}</p>`; return; }
+  $("docs").innerHTML = groupHtml(list);
+  const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(e.currentTarget.dataset); };
+  $("docs").querySelectorAll("[data-open]").forEach(b => b.onclick = stop(ds => openDoc(ds.open)));
+  $("docs").querySelectorAll("[data-read]").forEach(b => b.onclick = stop(async ds => { b.disabled = true; b.textContent = "Læser …"; await summarizeDoc(ds.read); }));
+  $("docs").querySelectorAll("[data-rm]").forEach(b => b.onclick = stop(async ds => { const d = S.docs.find(x => x.id === ds.rm);
     if (!confirm(`Flyt «${d.name}» til papirkurven?\n\nDu kan gendanne den igen under «Vis papirkurv».`)) return;
-    await sb.from("documents").update({ deleted_at: new Date().toISOString() }).eq("id", d.id); loadDocs(); });
-  $("docs").querySelectorAll("[data-restore]").forEach(b => b.onclick = async () => { await sb.from("documents").update({ deleted_at: null }).eq("id", b.dataset.restore); loadDocs(); });
-  $("docs").querySelectorAll("[data-purge]").forEach(b => b.onclick = async () => { const d = S.docs.find(x => x.id === b.dataset.purge);
+    await sb.from("documents").update({ deleted_at: new Date().toISOString() }).eq("id", d.id); loadDocs(); }));
+  $("docs").querySelectorAll("[data-restore]").forEach(b => b.onclick = stop(async ds => { await sb.from("documents").update({ deleted_at: null }).eq("id", ds.restore); loadDocs(); }));
+  $("docs").querySelectorAll("[data-purge]").forEach(b => b.onclick = stop(async ds => { const d = S.docs.find(x => x.id === ds.purge);
     const ans = prompt(`Slet «${d.name}» permanent? Det kan ikke fortrydes.\n\nSkriv SLET for at bekræfte.`); if (ans !== "SLET") return;
-    await sb.storage.from("documents").remove([d.storage_path]); await sb.from("documents").delete().eq("id", d.id); loadDocs(); });
+    await sb.storage.from("documents").remove([d.storage_path]); await sb.from("documents").delete().eq("id", d.id); loadDocs(); }));
 }
+async function aiCall(body){
+  const { data, error } = await sb.functions.invoke("ai-assistant", { body });
+  if (error || data?.error) { let b = data; try { b = await error.context.json(); } catch {} return { error: b?.error || error?.message || "Ukendt fejl", body: b }; }
+  return data;
+}
+async function summarizeDoc(id){
+  const r = await aiCall({ mode: "summarize", document_id: id });
+  if (r.error) { $("read-status").textContent = r.error; renderDocs(); return false; }
+  const d = S.docs.find(x => x.id === id); if (d) { d.summary = r.summary; d.summary_at = new Date().toISOString(); }
+  renderDocs(); const row = $("docs").querySelector(`[data-id="${id}"]`); if (row) row.open = true; return true;
+}
+$("read-all").onclick = async () => {
+  const cid = $("d-client").value || S.scopedClient?.id; const list = docsFor(cid, $("d-case").value).filter(d => !d.summary && !isOld(d));
+  $("read-all").disabled = true; let ok = 0;
+  for (const [i, d] of list.entries()) {
+    $("read-status").textContent = `Læser ${i + 1} af ${list.length}: ${d.name} …`;
+    if (await summarizeDoc(d.id)) ok++; else if (/minut/.test($("read-status").textContent)) { await new Promise(r => setTimeout(r, 60000)); if (await summarizeDoc(d.id)) ok++; }
+  }
+  $("read-status").textContent = `Færdig: ${ok} af ${list.length} filer læst.`; renderDocs();
+};
 $("d-upload").onclick = async () => {
   const cid = $("d-client").value; const files = [...$("d-files").files];
   if (!cid) { $("d-err").textContent = "Vælg en kunde."; return; } if (!files.length) { $("d-err").textContent = "Vælg mindst én fil."; return; }
@@ -559,8 +665,8 @@ function updatePickCount(){ const n = $("a-docs").querySelectorAll("input:checke
 function renderDocPick(){
   const checked = new Set([...$("a-docs").querySelectorAll("input:checked")].map(i => i.value));
   const list = docsFor($("a-client").value || S.scopedClient?.id, $("a-case").value);
-  $("a-docs").innerHTML = list.length ? list.map(d => `<label class="${S.threadRead.has(d.id) ? "read" : ""} ${isOld(d) ? "old" : ""}"><input type="checkbox" value="${d.id}" ${checked.has(d.id) ? "checked" : ""}>${esc(d.name)}${S.threadRead.has(d.id) ? ' <span class="tag">✓ læst</span>' : ""}</label>`).join("") : '<span class="muted">Ingen dokumenter på det valgte projekt.</span>';
-  $("a-docs").querySelectorAll("input").forEach(i => i.onchange = updatePickCount); updatePickCount();
+  $("a-docs").innerHTML = list.length ? groupHtml(list, { pick: true, checked }) : '<span class="muted">Ingen dokumenter på det valgte projekt.</span>';
+  $("a-docs").querySelectorAll("input").forEach(i => { i.onclick = (e) => e.stopPropagation(); i.onchange = updatePickCount; }); updatePickCount();
 }
 $("pick-all").onclick = () => { $("a-docs").querySelectorAll("input").forEach(i => i.checked = true); updatePickCount(); };
 $("pick-none").onclick = () => { $("a-docs").querySelectorAll("input").forEach(i => i.checked = false); updatePickCount(); };
@@ -631,6 +737,68 @@ $("a-send").onclick = async () => {
   S.threadId = data.thread_id;
   (data.sources?.read || []).forEach(r => S.threadRead.add(r.id));
   addMsg("assistant", data.reply, { sources: data.sources }); renderDocPick(); loadThreads();
+};
+/* ---------- Aflevering ---------- */
+const DL_STATUS = { mangler: "Mangler", i_gang: "I gang", klar: "Klar", ikke_relevant: "Ikke relevant" };
+let deliverables = [];
+async function loadDeliverables(){
+  const kid = $("v-case").value; if (!kid) { $("dl-list").innerHTML = '<p class="muted">Vælg et projekt.</p>'; return; }
+  const { data } = await sb.from("deliverables").select("*").eq("case_id", kid).order("sort").order("created_at"); deliverables = data || []; renderDeliverables();
+}
+function renderDeliverables(){
+  const rel = deliverables.filter(x => x.status !== "ikke_relevant"); const done = rel.filter(x => x.status === "klar").length;
+  const pct = rel.length ? Math.round(done / rel.length * 100) : 0;
+  $("dl-pct").textContent = `${pct} %`; $("dl-bar").style.width = pct + "%";
+  const mand = rel.filter(x => x.requirement === "obligatorisk");
+  $("dl-sum").textContent = rel.length ? `${done} af ${rel.length} klar · obligatoriske: ${mand.filter(x => x.status === "klar").length} af ${mand.length} · i gang: ${rel.filter(x => x.status === "i_gang").length}` : "Ingen punkter endnu";
+  if (!deliverables.length) { $("dl-list").innerHTML = `<p class="muted">${isOwner() ? "Ingen punkter endnu. Klik «Lav liste med robotten» – den læser projektets gældende udbudsmateriale og laver listen – eller tilføj punkter selv." : "Ingen punkter endnu."}</p>`; return; }
+  $("dl-list").innerHTML = deliverables.map(x => {
+    const f = x.document_id ? S.docs.find(d => d.id === x.document_id) : null;
+    const status = isOwner()
+      ? `<select data-status="${x.id}" class="dl-status" aria-label="Status">${Object.entries(DL_STATUS).map(([k, v]) => `<option value="${k}" ${x.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>`
+      : `<span class="badge ${x.status === "klar" ? "read" : ""}">${DL_STATUS[x.status]}</span>`;
+    return `<div class="dl-row ${x.status}">
+      <div>${status}</div>
+      <div><div class="t">${esc(x.title)} <span class="badge ${x.requirement === "obligatorisk" ? "submit" : ""}">${x.requirement}</span></div>
+        ${x.description ? `<div class="d">${esc(x.description)}</div>` : ""}${x.source ? `<div class="d" style="font-size:12px">Kilde: ${esc(x.source)}</div>` : ""}
+        <div class="file">${f ? `📎 <a href="#" data-dlopen="${f.id}">${esc(f.name)}</a>` : `<span class="muted">Ingen fil uploadet</span>`}</div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${isOwner() ? `<label class="btn small" style="cursor:pointer">${f ? "Ny version" : "Upload fil"}<input type="file" data-upl="${x.id}" hidden></label>
+        ${x.status !== "klar" ? `<button class="btn small primary" data-done="${x.id}">Markér klar</button>` : ""}<button class="btn small danger" data-dldel="${x.id}" style="margin-left:14px">Fjern</button>` : ""}</div>
+    </div>`; }).join("");
+  const upd = async (id, patch) => { await sb.from("deliverables").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id); loadDeliverables(); };
+  $("dl-list").querySelectorAll("[data-status]").forEach(s => s.onchange = () => upd(s.dataset.status, { status: s.value }));
+  $("dl-list").querySelectorAll("[data-done]").forEach(b => b.onclick = () => upd(b.dataset.done, { status: "klar" }));
+  $("dl-list").querySelectorAll("[data-dlopen]").forEach(a => a.onclick = (e) => { e.preventDefault(); openDoc(a.dataset.dlopen); });
+  $("dl-list").querySelectorAll("[data-dldel]").forEach(b => b.onclick = async () => { const x = deliverables.find(y => y.id === b.dataset.dldel);
+    if (!confirm(`Fjern «${x.title}» fra afleveringslisten?`)) return; await sb.from("deliverables").delete().eq("id", x.id); loadDeliverables(); });
+  $("dl-list").querySelectorAll("[data-upl]").forEach(inp => inp.onchange = async () => {
+    const x = deliverables.find(y => y.id === inp.dataset.upl); const f = inp.files[0]; if (!f) return;
+    $("dl-err").textContent = `Uploader ${f.name} …`;
+    const safe = f.name.normalize("NFKD").replace(/[^\w.\-]+/g, "_"); const path = `${x.client_id}/${crypto.randomUUID()}-${safe}`;
+    const up = await sb.storage.from("documents").upload(path, f, { contentType: f.type || "application/octet-stream" });
+    if (up.error) { $("dl-err").textContent = up.error.message; return; }
+    const { data: doc, error } = await sb.from("documents").insert({ client_id: x.client_id, case_id: x.case_id, name: f.name, storage_path: path, mime_type: f.type, size_bytes: f.size, category: "aflevering" }).select().single();
+    if (error) { $("dl-err").textContent = error.message; return; }
+    if (x.document_id) await sb.from("documents").update({ deleted_at: new Date().toISOString() }).eq("id", x.document_id); // gammel version i papirkurven
+    $("dl-err").textContent = "Uploadet. Markér punktet «Klar», når filen er færdig.";
+    await upd(x.id, { document_id: doc.id, status: x.status === "mangler" ? "i_gang" : x.status }); loadDocs();
+  });
+}
+$("dl-add").onclick = async () => {
+  const t = $("dl-new").value.trim(); const kid = $("v-case").value; if (!t || !kid) return;
+  const k = S.cases.find(c => c.id === kid);
+  const { error } = await sb.from("deliverables").insert({ client_id: k.client_id, case_id: kid, title: t, sort: deliverables.length + 1 });
+  $("dl-err").textContent = error ? error.message : ""; $("dl-new").value = ""; loadDeliverables();
+};
+$("dl-gen").onclick = async () => {
+  const kid = $("v-case").value; if (!kid) return;
+  const docs = S.docs.filter(d => d.case_id === kid && !d.deleted_at && d.category !== "aflevering" && !isOld(d));
+  if (!docs.length) { $("dl-err").textContent = "Projektet har ingen dokumenter. Upload udbudsmaterialet under Dokumenter først."; return; }
+  $("dl-gen").disabled = true; $("dl-err").textContent = `Robotten læser ${docs.length} dokumenter og laver listen … det kan tage et par minutter.`;
+  const r = await aiCall({ mode: "deliverables", case_id: kid, document_ids: docs.map(d => d.id) });
+  $("dl-gen").disabled = false;
+  $("dl-err").textContent = r.error ? r.error : `${r.added} punkter tilføjet${r.skipped_duplicates ? ` (${r.skipped_duplicates} fandtes allerede)` : ""}. Gennemgå listen, og sæt betingede punkter til «Ikke relevant», hvis de ikke gælder jer.`;
+  loadDeliverables();
 };
 $("a-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("a-send").click(); });
 </script>
