@@ -130,6 +130,7 @@ td.actions .btn+.btn{margin-left:28px}
 .doc-row .dmeta{font-size:12px;color:var(--muted);white-space:nowrap}
 .doc-row .dacts{display:flex;gap:6px;margin-left:auto}
 .doc-row .dacts .danger{margin-left:22px}
+.doc-row .dacts [data-up],.doc-row .dacts [data-down]{padding:5px 8px;font-size:11px;color:var(--muted)}
 .doc-row .dbody{padding:2px 16px 14px 40px;font-size:14px}
 .doc-row .dbody ul{margin:6px 0 8px;padding-left:20px}
 .doc-row.old{opacity:.65}
@@ -538,7 +539,7 @@ function show(v){
 /* ---------- Data ---------- */
 async function loadClients(){ const { data } = await sb.from("clients").select("*").order("name"); S.clients = data || []; renderClients(); }
 async function loadCases(){ const { data } = await sb.from("cases").select("*, clients(name)").order("created_at", { ascending:false }); S.cases = data || []; renderCases(); }
-async function loadDocs(){ const { data } = await sb.from("documents").select("id, client_id, case_id, name, storage_path, mime_type, size_bytes, uploaded_by, created_at, deleted_at, summary, summary_at, category, content_kind, content_pages").order("created_at", { ascending:false }); S.docs = data || []; renderDocs(); }
+async function loadDocs(){ const { data } = await sb.from("documents").select("id, client_id, case_id, name, storage_path, mime_type, size_bytes, uploaded_by, created_at, deleted_at, summary, summary_at, category, content_kind, content_pages, sort").order("sort", { ascending:true, nullsFirst:false }).order("created_at", { ascending:false }); S.docs = data || []; renderDocs(); }
 const visibleClients = () => S.scopedClient ? [S.scopedClient] : S.clients;
 
 function fillClientSelects(){
@@ -697,8 +698,16 @@ async function openDoc(id){
   if (w) w.location.href = data.signedUrl; else location.href = data.signedUrl;
 }
 const fmtDate = (x) => new Date(x).toLocaleDateString("da-DK");
+function fixSummary(s){
+  if (!s || typeof s.summary !== "string" || !/^\s*(```|\{)/.test(s.summary)) return s;
+  const t = s.summary.replace(/```(json)?/g, "");
+  try { return { ...JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1)), pages: s.pages, kind: s.kind }; } catch {}
+  const field = (k) => { const m = t.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"\\s*,\\s*"[a-z_]+"\\s*:`)); return m ? m[1] : ""; };
+  const list = (k) => { const m = t.match(new RegExp(`"${k}"\\s*:\\s*\\[([\\s\\S]*?)\\]\\s*(,\\s*"[a-z_]+"\\s*:|\\}|$)`)); return m ? m[1].split(/"\s*,\s*"/).map(x => x.replace(/^\s*"|"\s*$/g, "").trim()).filter(Boolean) : []; };
+  return { type: field("type"), summary: field("summary"), key_points: list("key_points"), deadlines: list("deadlines"), must_submit: (t.match(/"must_submit"\s*:\s*"(ja|nej|betinget)"/) || [])[1], submit_note: field("submit_note"), pages: s.pages };
+}
 function summaryHtml(d){
-  const s = d.summary;
+  const s = fixSummary(d.summary);
   if (!s) return `<p class="muted">Robotten har ikke læst filen endnu.${isOwner() ? " Klik «Læs» for at få de vigtigste punkter." : ""}</p>`;
   const li = (a) => (a || []).filter(Boolean).map(x => `<li>${esc(x)}</li>`).join("");
   return `${s.summary ? `<p>${esc(s.summary)}</p>` : ""}
@@ -708,13 +717,13 @@ function summaryHtml(d){
     <p class="muted" style="font-size:12px">Læst af robotten ${d.summary_at ? fmtDate(d.summary_at) : ""}${s.pages ? ` · ${s.pages} sider` : ""}</p>`;
 }
 function docRow(d, { pick = false, checked = false } = {}){
-  const k = S.cases.find(x => x.id === d.case_id); const s = d.summary;
+  const k = S.cases.find(x => x.id === d.case_id); const s = fixSummary(d.summary);
   const status = s ? `<span class="badge read">✓ Læst</span>` : `<span class="badge">Ikke læst</span>`;
   const used = pick && S.threadRead.has(d.id) ? ` <span class="badge used">Brugt i samtalen</span>` : "";
   const submit = s?.must_submit === "ja" ? ` <span class="badge submit">Afleveres</span>` : "";
   const acts = pick ? "" : (showTrash
     ? `<button class="btn small" data-restore="${d.id}">Gendan</button><button class="btn small danger" data-purge="${d.id}">Slet permanent</button>`
-    : `<button class="btn small" data-open="${d.id}">Åbn</button>${isOwner() ? `<button class="btn small" data-read="${d.id}">${s ? "Læs igen" : "Læs"}</button><button class="btn small danger" data-rm="${d.id}" title="Flyt til papirkurv">Slet</button>` : ""}`);
+    : `${isOwner() ? `<button class="btn small" data-up="${d.id}" title="Flyt op" aria-label="Flyt op">▲</button><button class="btn small" data-down="${d.id}" title="Flyt ned" aria-label="Flyt ned">▼</button>` : ""}<button class="btn small" data-open="${d.id}">Åbn</button>${isOwner() ? `<button class="btn small" data-read="${d.id}">${s ? "Læs igen" : "Læs"}</button><button class="btn small danger" data-rm="${d.id}" title="Flyt til papirkurv">Slet</button>` : ""}`);
   return `<details class="doc-row ${isOld(d) ? "old" : ""}" data-id="${d.id}"><summary>
       ${pick ? `<input type="checkbox" value="${d.id}" ${checked ? "checked" : ""} aria-label="Send ${esc(d.name)} med">` : ""}<span class="caret">▸</span>
       <span class="dname">${esc(d.name)}</span>${status}${submit}${used}
@@ -737,6 +746,7 @@ function renderDocs(){
   $("docs").innerHTML = groupHtml(list);
   const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(e.currentTarget.dataset); };
   $("docs").querySelectorAll("[data-open]").forEach(b => b.onclick = stop(ds => openDoc(ds.open)));
+  $("docs").querySelectorAll("[data-up],[data-down]").forEach(b => b.onclick = stop(ds => moveDoc(ds.up || ds.down, ds.up ? -1 : 1)));
   $("docs").querySelectorAll("[data-read]").forEach(b => b.onclick = stop(async ds => { b.disabled = true; b.textContent = "Læser …"; await summarizeDoc(ds.read); }));
   $("docs").querySelectorAll("[data-rm]").forEach(b => b.onclick = stop(async ds => { const d = S.docs.find(x => x.id === ds.rm);
     if (!confirm(`Flyt «${d.name}» til papirkurven?\n\nDu kan gendanne den igen under «Vis papirkurv».`)) return;
@@ -745,6 +755,18 @@ function renderDocs(){
   $("docs").querySelectorAll("[data-purge]").forEach(b => b.onclick = stop(async ds => { const d = S.docs.find(x => x.id === ds.purge);
     const ans = prompt(`Slet «${d.name}» permanent? Det kan ikke fortrydes.\n\nSkriv SLET for at bekræfte.`); if (ans !== "SLET") return;
     await sb.storage.from("documents").remove([d.storage_path]); await sb.from("documents").delete().eq("id", d.id); loadDocs(); }));
+}
+async function moveDoc(id, dir){
+  // Flyt inden for samme gruppe (materiale / aflevering / ikke gældende)
+  const d = S.docs.find(x => x.id === id); const grp = (x) => x.category === "aflevering" ? "a" : isOld(x) ? "o" : "m";
+  const cid = $("d-client").value || S.scopedClient?.id; const kid = $("d-case").value;
+  const list = docsFor(cid, kid).filter(x => grp(x) === grp(d));
+  const i = list.findIndex(x => x.id === id), j = i + dir; if (j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]];
+  list.forEach((x, n) => x.sort = n + 1);
+  S.docs.sort((a, b) => (a.sort ?? 1e9) - (b.sort ?? 1e9) || new Date(b.created_at) - new Date(a.created_at));
+  renderDocs();
+  await Promise.all(list.map((x, n) => sb.from("documents").update({ sort: n + 1 }).eq("id", x.id)));
 }
 async function aiCall(body, onProgress){
   for (let attempt = 0; attempt < 2; attempt++) {
