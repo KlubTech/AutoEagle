@@ -376,7 +376,11 @@ td.actions .btn+.btn{margin-left:28px}
         <div class="panel-title"><h3>Frister</h3><span class="muted" id="dd-next"></span></div>
         <div id="dd-list"></div>
         <div class="row owner-only" style="margin-top:12px">
+          <div class="field" style="flex:3"><label for="dd-focus">Instruks til robotten (valgfrit)</label><input id="dd-focus" placeholder="Fx «Tidsplanen står i Udbudsbetingelser pkt. 4.4 – tag alle datoer derfra»"></div>
+          <div class="field" style="flex:2"><label for="dd-doc">Læs kun</label><select id="dd-doc"></select></div>
           <div class="field" style="flex:0"><button class="btn gold" id="dd-gen">Find frister med robotten</button></div>
+        </div>
+        <div class="row owner-only">
           <div class="field" style="flex:2"><input id="dd-title" placeholder="Tilføj frist selv, fx «Spørgefrist»"></div>
           <div class="field"><input id="dd-due" type="datetime-local" aria-label="Dato og tid"></div>
           <div class="field" style="flex:0"><select id="dd-kind" aria-label="Type"><option value="spørgefrist">Spørgefrist</option><option value="tilbudsfrist">Tilbudsfrist</option><option value="møde">Møde</option><option value="test">Test/prøve</option><option value="standstill">Standstill</option><option value="kontrakt">Kontrakt</option><option value="andet" selected>Andet</option></select></div>
@@ -877,6 +881,9 @@ const DL_STATUS = { mangler: "Mangler", i_gang: "I gang", klar: "Klar", ikke_rel
 let deliverables = [];
 async function loadDeliverables(){
   const kid = $("v-case").value; if (!kid) { $("dl-list").innerHTML = '<p class="muted">Vælg et projekt.</p>'; $("dd-list").innerHTML = ""; $("q-list").innerHTML = ""; return; }
+  const cdocs = S.docs.filter(d => d.case_id === kid && !d.deleted_at && d.category !== "aflevering" && !isOld(d)); const curDoc = $("dd-doc").value;
+  $("dd-doc").innerHTML = '<option value="">Alle gældende dokumenter</option>' + cdocs.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join("");
+  const ub = cdocs.find(d => /udbudsbetingelser/i.test(d.name)); $("dd-doc").value = cdocs.some(d => d.id === curDoc) ? curDoc : (ub?.id || "");
   loadDeadlines(); loadQuestions();
   const { data } = await sb.from("deliverables").select("*").eq("case_id", kid).order("sort").order("created_at"); deliverables = data || []; renderDeliverables();
 }
@@ -973,7 +980,8 @@ $("dd-add").onclick = async () => {
 $("dd-gen").onclick = async () => {
   const kid = $("v-case").value; if (!kid) return;
   $("dd-gen").disabled = true; $("dd-err").textContent = "Robotten læser udbudsmaterialet og finder frister … det kan tage et minut.";
-  const r = await aiCall({ mode: "deadlines", case_id: kid }, m => $("dd-err").textContent = m); $("dd-gen").disabled = false;
+  const docId = $("dd-doc").value;
+  const r = await aiCall({ mode: "deadlines", case_id: kid, focus: $("dd-focus").value.trim(), document_ids: docId ? [docId] : [] }, m => $("dd-err").textContent = m); $("dd-gen").disabled = false;
   $("dd-err").textContent = r.error ? r.error : `${r.added} frister tilføjet${r.skipped_duplicates ? ` (${r.skipped_duplicates} fandtes allerede)` : ""}. Kontrollér datoerne mod materialet.`;
   loadDeadlines(); loadCases();
 };
