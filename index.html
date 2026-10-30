@@ -107,6 +107,24 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .doc-pick label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:13px;cursor:pointer;background:var(--panel)}
 .doc-pick input{width:auto}
 .thinking{color:var(--muted);font-style:italic}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:12px;line-height:1.4;border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:var(--bg);color:var(--muted)}
+.msg.user .chip{background:rgba(255,255,255,.12);color:inherit;border-color:rgba(255,255,255,.28)}
+.chip.ok{border-color:var(--moss);color:var(--moss)}
+.chip.bad{border-color:var(--danger);color:var(--danger)}
+details.sources{margin-top:12px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+details.sources summary{cursor:pointer;font-weight:600}
+.pick-tools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.doc-pick label.read{border-color:var(--moss)}
+.doc-pick label.old{opacity:.6}
+.doc-pick .tag{font-size:11px;color:var(--moss);font-weight:600}
+td.actions{white-space:nowrap;text-align:right}
+td.actions .btn+.btn{margin-left:28px}
+.docs-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px}
+@media (max-width:820px){
+  #docs th:nth-child(2),#docs td:nth-child(2),#docs th:nth-child(3),#docs td:nth-child(3){display:none}
+  td.actions .btn{padding:8px 14px}
+}
 
 @media (max-width:820px){
   #app{grid-template-columns:1fr}
@@ -233,6 +251,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         </div>
         <div class="err" id="d-err"></div>
       </div>
+      <div class="docs-head"><span class="muted" id="docs-count"></span><button class="btn small owner-only" id="trash-toggle">Vis papirkurv</button></div>
       <div class="table-scroll"><table id="docs"></table></div>
     </section>
 
@@ -250,7 +269,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
             <div class="field"><label for="a-case">Projekt</label><select id="a-case"></select></div>
           </div>
           <div class="msgs" id="msgs"><p class="muted">Vælg dokumenter nedenfor og skriv en opgave, fx «Lav en tjekliste over alle mindstekrav» eller «Skriv et høringssvar om prismodellen».</p></div>
-          <div class="field"><label>Læs disse dokumenter med</label><div class="doc-pick" id="a-docs"><span class="muted">Ingen dokumenter på det valgte projekt.</span></div></div>
+          <div class="field"><label>Læs disse dokumenter med</label><div class="pick-tools"><button class="btn small" type="button" id="pick-all">Alle</button><button class="btn small" type="button" id="pick-cur">Kun gældende</button><button class="btn small" type="button" id="pick-none">Ingen</button><span class="muted" id="pick-count" style="font-size:13px;align-self:center"></span></div><div class="doc-pick" id="a-docs"><span class="muted">Ingen dokumenter på det valgte projekt.</span></div></div>
           <div class="field"><label for="a-input">Opgave</label><textarea id="a-input" placeholder="Hvad skal assistenten gøre?"></textarea></div>
           <div class="row"><div class="field" style="flex:0"><button class="btn primary" id="a-send">Send til assistent</button></div><div class="err" id="a-err" style="flex:3"></div></div>
         </div>
@@ -484,17 +503,36 @@ $("k-save").onclick = async () => {
 };
 
 /* ---------- Documents ---------- */
-function docsFor(cid, kid){ return S.docs.filter(d => (!cid || d.client_id === cid) && (!kid || d.case_id === kid)); }
+let showTrash = false;
+const isOld = (d) => /ikke g[æa]ldende/i.test(d.name);
+function docsFor(cid, kid, trash = false){ return S.docs.filter(d => (!cid || d.client_id === cid) && (!kid || d.case_id === kid) && (trash ? !!d.deleted_at : !d.deleted_at)); }
+$("trash-toggle").onclick = () => { showTrash = !showTrash; $("trash-toggle").textContent = showTrash ? "Tilbage til dokumenter" : "Vis papirkurv"; renderDocs(); };
+async function openDoc(id){
+  const d = S.docs.find(x => x.id === id);
+  const w = window.open("", "_blank"); // åbnes straks, så mobilbrowsere ikke blokerer vinduet
+  const { data, error } = await sb.storage.from("documents").createSignedUrl(d.storage_path, 300);
+  if (error || !data) { if (w) w.close(); alert("Filen kunne ikke åbnes: " + (error?.message || "ukendt fejl")); return; }
+  if (w) w.location.href = data.signedUrl; else location.href = data.signedUrl;
+}
 function renderDocs(){
-  const list = docsFor($("d-client").value || S.scopedClient?.id, $("d-case").value);
-  if (!list.length) { $("docs").innerHTML = '<tr><td class="muted">Ingen dokumenter her endnu. Upload udbudsmateriale ovenfor.</td></tr>'; return; }
-  $("docs").innerHTML = "<tr><th>Dokument</th><th>Projekt</th><th>Størrelse</th><th>Uploadet</th><th></th></tr>" + list.map(d => {
+  const cid = $("d-client").value || S.scopedClient?.id; const kid = $("d-case").value;
+  const list = docsFor(cid, kid, showTrash);
+  const trashN = isOwner() ? docsFor(cid, kid, true).length : 0;
+  $("docs-count").textContent = showTrash ? `Papirkurv: ${list.length} dokument(er). Filerne er ikke slettet endnu.` : `${list.length} dokument(er)` + (trashN ? ` · ${trashN} i papirkurven` : "");
+  if (!list.length) { $("docs").innerHTML = `<tr><td class="muted">${showTrash ? "Papirkurven er tom." : "Ingen dokumenter her endnu. Upload udbudsmateriale ovenfor."}</td></tr>`; return; }
+  $("docs").innerHTML = "<tr><th>Dokument</th><th>Projekt</th><th>Størrelse</th><th>" + (showTrash ? "Slettet" : "Uploadet") + "</th><th></th></tr>" + list.map(d => {
     const k = S.cases.find(x => x.id === d.case_id);
-    return `<tr><td>${esc(d.name)}</td><td>${esc(k?.title || "–")}</td><td class="num">${d.size_bytes ? Math.ceil(d.size_bytes/1024).toLocaleString("da-DK") + " KB" : ""}</td><td class="num">${new Date(d.created_at).toLocaleDateString("da-DK")}</td>
-      <td><button class="btn small" data-open="${d.id}">Åbn</button>${isOwner() ? ` <button class="btn small danger" data-rm="${d.id}">Slet</button>` : ""}</td></tr>`; }).join("");
-  $("docs").querySelectorAll("[data-open]").forEach(b => b.onclick = async () => { const d = S.docs.find(x => x.id === b.dataset.open);
-    const { data } = await sb.storage.from("documents").createSignedUrl(d.storage_path, 300); if (data) window.open(data.signedUrl, "_blank"); });
-  $("docs").querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => { const d = S.docs.find(x => x.id === b.dataset.rm); if (!confirm(`Slet ${d.name}?`)) return;
+    const acts = showTrash
+      ? `<button class="btn small" data-restore="${d.id}">Gendan</button><button class="btn small danger" data-purge="${d.id}">Slet permanent</button>`
+      : `<button class="btn small" data-open="${d.id}">Åbn</button>` + (isOwner() ? `<button class="btn small danger" data-rm="${d.id}" title="Flyt til papirkurv">Slet</button>` : "");
+    return `<tr><td>${esc(d.name)}</td><td>${esc(k?.title || "–")}</td><td class="num">${d.size_bytes ? Math.ceil(d.size_bytes/1024).toLocaleString("da-DK") + " KB" : ""}</td><td class="num">${new Date(showTrash ? d.deleted_at : d.created_at).toLocaleDateString("da-DK")}</td><td class="actions">${acts}</td></tr>`; }).join("");
+  $("docs").querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDoc(b.dataset.open));
+  $("docs").querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => { const d = S.docs.find(x => x.id === b.dataset.rm);
+    if (!confirm(`Flyt «${d.name}» til papirkurven?\n\nDu kan gendanne den igen under «Vis papirkurv».`)) return;
+    await sb.from("documents").update({ deleted_at: new Date().toISOString() }).eq("id", d.id); loadDocs(); });
+  $("docs").querySelectorAll("[data-restore]").forEach(b => b.onclick = async () => { await sb.from("documents").update({ deleted_at: null }).eq("id", b.dataset.restore); loadDocs(); });
+  $("docs").querySelectorAll("[data-purge]").forEach(b => b.onclick = async () => { const d = S.docs.find(x => x.id === b.dataset.purge);
+    const ans = prompt(`Slet «${d.name}» permanent? Det kan ikke fortrydes.\n\nSkriv SLET for at bekræfte.`); if (ans !== "SLET") return;
     await sb.storage.from("documents").remove([d.storage_path]); await sb.from("documents").delete().eq("id", d.id); loadDocs(); });
 }
 $("d-upload").onclick = async () => {
@@ -514,10 +552,19 @@ $("d-upload").onclick = async () => {
 };
 
 /* ---------- Assistant ---------- */
+S.threadRead = new Set();
+const docName = (id) => S.docs.find(d => d.id === id)?.name || "Slettet dokument";
+const kTok = (n) => n >= 1000 ? Math.round(n/1000) + "k" : String(n);
+function updatePickCount(){ const n = $("a-docs").querySelectorAll("input:checked").length; $("pick-count").textContent = n ? `${n} valgt` : ""; }
 function renderDocPick(){
+  const checked = new Set([...$("a-docs").querySelectorAll("input:checked")].map(i => i.value));
   const list = docsFor($("a-client").value || S.scopedClient?.id, $("a-case").value);
-  $("a-docs").innerHTML = list.length ? list.map(d => `<label><input type="checkbox" value="${d.id}">${esc(d.name)}</label>`).join("") : '<span class="muted">Ingen dokumenter på det valgte projekt.</span>';
+  $("a-docs").innerHTML = list.length ? list.map(d => `<label class="${S.threadRead.has(d.id) ? "read" : ""} ${isOld(d) ? "old" : ""}"><input type="checkbox" value="${d.id}" ${checked.has(d.id) ? "checked" : ""}>${esc(d.name)}${S.threadRead.has(d.id) ? ' <span class="tag">✓ læst</span>' : ""}</label>`).join("") : '<span class="muted">Ingen dokumenter på det valgte projekt.</span>';
+  $("a-docs").querySelectorAll("input").forEach(i => i.onchange = updatePickCount); updatePickCount();
 }
+$("pick-all").onclick = () => { $("a-docs").querySelectorAll("input").forEach(i => i.checked = true); updatePickCount(); };
+$("pick-none").onclick = () => { $("a-docs").querySelectorAll("input").forEach(i => i.checked = false); updatePickCount(); };
+$("pick-cur").onclick = () => { $("a-docs").querySelectorAll("input").forEach(i => { const d = S.docs.find(x => x.id === i.value); i.checked = !!d && !isOld(d); }); updatePickCount(); };
 async function loadThreads(){
   let q = sb.from("ai_threads").select("*").order("created_at", { ascending:false }).limit(50);
   const cid = $("a-client").value || S.scopedClient?.id; if (cid) q = q.eq("client_id", cid);
@@ -526,11 +573,13 @@ async function loadThreads(){
   $("threads").querySelectorAll("[data-t]").forEach(b => b.onclick = () => openThread(b.dataset.t));
 }
 async function openThread(id){
-  S.threadId = id; loadThreads();
+  S.threadId = id; S.threadRead = new Set(); loadThreads();
   const { data } = await sb.from("ai_messages").select("*").eq("thread_id", id).order("created_at");
-  $("msgs").innerHTML = ""; (data || []).forEach(m => addMsg(m.role, m.content));
+  $("msgs").innerHTML = "";
+  (data || []).forEach(m => { (m.sources?.read || []).forEach(r => S.threadRead.add(r.id)); addMsg(m.role, m.content, m); });
+  renderDocPick();
 }
-$("new-thread").onclick = () => { S.threadId = null; $("msgs").innerHTML = '<p class="muted">Ny samtale. Vælg dokumenter og skriv en opgave.</p>'; loadThreads(); };
+$("new-thread").onclick = () => { S.threadId = null; S.threadRead = new Set(); $("msgs").innerHTML = '<p class="muted">Ny samtale. Vælg dokumenter og skriv en opgave.</p>'; loadThreads(); renderDocPick(); };
 function md(t){
   let h = esc(t);
   h = h.replace(/^### (.*)$/gm, "<h3>$1</h3>").replace(/^## (.*)$/gm, "<h3>$1</h3>").replace(/^# (.*)$/gm, "<h3>$1</h3>");
@@ -539,24 +588,49 @@ function md(t){
   h = h.replace(/(?:^|\n)((?:\d+\. .*(?:\n|$))+)/g, (m, l) => "\n<ol>" + l.trim().split("\n").map(x => `<li>${x.replace(/^\d+\. /, "")}</li>`).join("") + "</ol>");
   return h.split(/\n{2,}/).map(p => /^\s*<(h3|ul|ol)/.test(p) ? p : `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
 }
-function addMsg(role, content){
+function sourcesHtml(src){
+  if (!src) return "";
+  const read = src.read || [], skipped = src.skipped || [], u = src.usage;
+  const tok = read.reduce((a, r) => a + (r.tokens || 0), 0);
+  const kr = u ? ((u.input_tokens || 0) * 2 / 1e6 + (u.output_tokens || 0) * 10 / 1e6) * 7 : null;
+  const head = read.length ? `Robotten læste ${read.length} dokument${read.length === 1 ? "" : "er"} · ca. ${kTok(u?.input_tokens || tok)} tokens` : "Ingen dokumenter læst i denne besked";
+  const cost = kr !== null ? ` · ca. ${kr < 0.1 ? "under 0,10" : kr.toLocaleString("da-DK", { maximumFractionDigits: 2 })} kr.` : "";
+  const warn = skipped.length ? ` · <span style="color:var(--danger)">${skipped.length} ikke læst</span>` : "";
+  const chips = read.map(r => `<span class="chip ok" title="${esc(r.kind)}">✓ ${esc(r.name)}${r.pages ? ` · ${r.pages} s.` : ""}</span>`).join("")
+    + skipped.map(s => `<span class="chip bad" title="${esc(s.reason)}">✕ ${esc(s.name)} – ${esc(s.reason)}</span>`).join("");
+  return `<details class="sources"${skipped.length ? " open" : ""}><summary>${head}${cost}${warn}</summary>${chips ? `<div class="chips">${chips}</div>` : ""}</details>`;
+}
+function addMsg(role, content, meta){
   if ($("msgs").querySelector("p.muted")) $("msgs").innerHTML = "";
   const div = document.createElement("div"); div.className = `msg ${role}`;
-  if (role === "assistant") { div.innerHTML = md(content) + '<div class="tools"><button class="btn small">Kopiér tekst</button></div>';
-    div.querySelector("button").onclick = (e) => { navigator.clipboard.writeText(content); e.target.textContent = "Kopieret"; }; }
-  else div.textContent = content;
+  if (role === "assistant") {
+    div.innerHTML = md(content) + sourcesHtml(meta?.sources) + '<div class="tools"><button class="btn small">Kopiér tekst</button></div>';
+    div.querySelector(".tools button").onclick = (e) => { navigator.clipboard.writeText(content); e.target.textContent = "Kopieret"; };
+  } else {
+    div.textContent = content;
+    const ids = meta?.document_ids || [];
+    if (ids.length) { const c = document.createElement("div"); c.className = "chips"; c.innerHTML = ids.map(id => `<span class="chip">📄 ${esc(docName(id))}</span>`).join(""); div.appendChild(c); }
+  }
   $("msgs").appendChild(div); div.scrollIntoView({ block:"end", behavior:"smooth" }); return div;
 }
 $("a-send").onclick = async () => {
   const message = $("a-input").value.trim(); if (!message) return;
   const document_ids = [...$("a-docs").querySelectorAll("input:checked")].map(i => i.value);
-  addMsg("user", message); $("a-input").value = ""; $("a-err").textContent = "";
-  const wait = document.createElement("div"); wait.className = "msg assistant thinking"; wait.textContent = document_ids.length ? `Læser ${document_ids.length} dokument(er) og arbejder …` : "Arbejder …"; $("msgs").appendChild(wait);
+  const userDiv = addMsg("user", message, { document_ids }); $("a-input").value = ""; $("a-err").textContent = "";
+  const wait = document.createElement("div"); wait.className = "msg assistant thinking"; wait.textContent = document_ids.length ? `Læser ${document_ids.length} dokument(er) og arbejder … det kan tage et minut.` : "Arbejder …"; $("msgs").appendChild(wait);
   $("a-send").disabled = true;
   const { data, error } = await sb.functions.invoke("ai-assistant", { body: { thread_id: S.threadId, client_id: $("a-client").value || S.scopedClient?.id || null, case_id: $("a-case").value || null, message, document_ids } });
   wait.remove(); $("a-send").disabled = false;
-  if (error || data?.error) { let msg = data?.error || error.message; try { msg = (await error.context.json()).error || msg; } catch {} $("a-err").textContent = msg; if (data?.thread_id) S.threadId = data.thread_id; return; }
-  S.threadId = data.thread_id; addMsg("assistant", data.reply); loadThreads();
+  if (error || data?.error) {
+    let body = data; try { body = await error.context.json(); } catch {}
+    let msg = body?.error || error?.message || "Ukendt fejl";
+    if (body?.too_large?.length) msg += " Største: " + body.too_large.slice(0, 5).map(r => `${r.name} (~${kTok(r.tokens)})`).join(", ");
+    $("a-err").textContent = msg; userDiv.remove(); $("a-input").value = message;
+    if (body?.thread_id) S.threadId = body.thread_id; return;
+  }
+  S.threadId = data.thread_id;
+  (data.sources?.read || []).forEach(r => S.threadRead.add(r.id));
+  addMsg("assistant", data.reply, { sources: data.sources }); renderDocPick(); loadThreads();
 };
 $("a-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("a-send").click(); });
 </script>
