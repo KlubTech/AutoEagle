@@ -524,7 +524,7 @@ function show(v){
 /* ---------- Data ---------- */
 async function loadClients(){ const { data } = await sb.from("clients").select("*").order("name"); S.clients = data || []; renderClients(); }
 async function loadCases(){ const { data } = await sb.from("cases").select("*, clients(name)").order("created_at", { ascending:false }); S.cases = data || []; renderCases(); }
-async function loadDocs(){ const { data } = await sb.from("documents").select("*").order("created_at", { ascending:false }); S.docs = data || []; renderDocs(); }
+async function loadDocs(){ const { data } = await sb.from("documents").select("id, client_id, case_id, name, storage_path, mime_type, size_bytes, uploaded_by, created_at, deleted_at, summary, summary_at, category, content_kind, content_pages").order("created_at", { ascending:false }); S.docs = data || []; renderDocs(); }
 const visibleClients = () => S.scopedClient ? [S.scopedClient] : S.clients;
 
 function fillClientSelects(){
@@ -732,10 +732,23 @@ function renderDocs(){
     const ans = prompt(`Slet «${d.name}» permanent? Det kan ikke fortrydes.\n\nSkriv SLET for at bekræfte.`); if (ans !== "SLET") return;
     await sb.storage.from("documents").remove([d.storage_path]); await sb.from("documents").delete().eq("id", d.id); loadDocs(); }));
 }
-async function aiCall(body){
-  const { data, error } = await sb.functions.invoke("ai-assistant", { body });
-  if (error || data?.error) { let b = data; try { b = await error.context.json(); } catch {} return { error: b?.error || error?.message || "Ukendt fejl", body: b }; }
-  return data;
+async function aiCall(body, onProgress){
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await sb.functions.invoke("ai-assistant", { body });
+    if (!error && !data?.error) return data;
+    let b = data; try { b = await error.context.json(); } catch {}
+    if (b?.missing?.length && attempt === 0) {
+      // Filer læses ind én ad gangen første gang (serverens CPU-grænse), derefter går det hurtigt
+      for (const [i, m] of b.missing.entries()) {
+        onProgress?.(`Forbereder fil ${i + 1} af ${b.missing.length}: ${m.name} …`);
+        await sb.functions.invoke("ai-assistant", { body: { mode: "extract", document_id: m.id } });
+      }
+      onProgress?.("Filerne er klar – robotten arbejder … det kan tage et par minutter.");
+      continue;
+    }
+    return { error: b?.error || error?.message || "Ukendt fejl", body: b };
+  }
+  return { error: "Kunne ikke forberede filerne. Prøv igen." };
 }
 async function summarizeDoc(id){
   const r = await aiCall({ mode: "summarize", document_id: id });
@@ -836,11 +849,11 @@ $("a-send").onclick = async () => {
   const userDiv = addMsg("user", message, { document_ids }); $("a-input").value = ""; $("a-err").textContent = "";
   const wait = document.createElement("div"); wait.className = "msg assistant thinking"; wait.textContent = document_ids.length ? `Læser ${document_ids.length} dokument(er) og arbejder … det kan tage et minut.` : "Arbejder …"; $("msgs").appendChild(wait);
   $("a-send").disabled = true;
-  const { data, error } = await sb.functions.invoke("ai-assistant", { body: { thread_id: S.threadId, client_id: $("a-client").value || S.scopedClient?.id || null, case_id: $("a-case").value || null, message, document_ids } });
+  const data = await aiCall({ thread_id: S.threadId, client_id: $("a-client").value || S.scopedClient?.id || null, case_id: $("a-case").value || null, message, document_ids }, m => wait.textContent = m);
   wait.remove(); $("a-send").disabled = false;
-  if (error || data?.error) {
-    let body = data; try { body = await error.context.json(); } catch {}
-    let msg = body?.error || error?.message || "Ukendt fejl";
+  if (data.error) {
+    const body = data.body;
+    let msg = data.error;
     if (body?.too_large?.length) msg += " Største: " + body.too_large.slice(0, 5).map(r => `${r.name} (~${kTok(r.tokens)})`).join(", ");
     $("a-err").textContent = msg; userDiv.remove(); $("a-input").value = message;
     if (body?.thread_id) S.threadId = body.thread_id; return;
@@ -907,7 +920,7 @@ $("dl-gen").onclick = async () => {
   const docs = S.docs.filter(d => d.case_id === kid && !d.deleted_at && d.category !== "aflevering" && !isOld(d));
   if (!docs.length) { $("dl-err").textContent = "Projektet har ingen dokumenter. Upload udbudsmaterialet under Dokumenter først."; return; }
   $("dl-gen").disabled = true; $("dl-err").textContent = `Robotten læser ${docs.length} dokumenter og laver listen … det kan tage et par minutter.`;
-  const r = await aiCall({ mode: "deliverables", case_id: kid, document_ids: docs.map(d => d.id) });
+  const r = await aiCall({ mode: "deliverables", case_id: kid }, m => $("dl-err").textContent = m);
   $("dl-gen").disabled = false;
   $("dl-err").textContent = r.error ? r.error : `${r.added} punkter tilføjet${r.skipped_duplicates ? ` (${r.skipped_duplicates} fandtes allerede)` : ""}. Gennemgå listen, og sæt betingede punkter til «Ikke relevant», hvis de ikke gælder jer.`;
   loadDeliverables();
@@ -950,7 +963,7 @@ $("dd-add").onclick = async () => {
 $("dd-gen").onclick = async () => {
   const kid = $("v-case").value; if (!kid) return;
   $("dd-gen").disabled = true; $("dd-err").textContent = "Robotten læser udbudsmaterialet og finder frister … det kan tage et minut.";
-  const r = await aiCall({ mode: "deadlines", case_id: kid }); $("dd-gen").disabled = false;
+  const r = await aiCall({ mode: "deadlines", case_id: kid }, m => $("dd-err").textContent = m); $("dd-gen").disabled = false;
   $("dd-err").textContent = r.error ? r.error : `${r.added} frister tilføjet${r.skipped_duplicates ? ` (${r.skipped_duplicates} fandtes allerede)` : ""}. Kontrollér datoerne mod materialet.`;
   loadDeadlines(); loadCases();
 };
@@ -999,7 +1012,7 @@ $("q-add").onclick = async () => {
 $("q-gen").onclick = async () => {
   const kid = $("v-case").value; if (!kid) return;
   $("q-gen").disabled = true; $("q-err").textContent = "Robotten gennemgår materialet og formulerer spørgsmål … det kan tage et par minutter.";
-  const r = await aiCall({ mode: "questions", case_id: kid, focus: $("q-focus").value.trim() }); $("q-gen").disabled = false;
+  const r = await aiCall({ mode: "questions", case_id: kid, focus: $("q-focus").value.trim() }, m => $("q-err").textContent = m); $("q-gen").disabled = false;
   $("q-err").textContent = r.error ? r.error : `${r.added} forslag tilføjet som kladde. Ret dem til, og sæt status til «Klar til afsendelse».`;
   loadQuestions();
 };
@@ -1050,7 +1063,7 @@ $("st-gen").onclick = async () => {
   const kid = $("s-case").value; if (!kid) return;
   if (strategy?.content && !confirm("Robotten opdaterer den nuværende strategi og bevarer dine formuleringer. Fortsæt?")) return;
   $("st-gen").disabled = true; setEdit(false); $("st-err").textContent = "Robotten læser materialet, kundens svar og projektstatus og skriver strategien … det kan tage 1-3 minutter.";
-  const r = await aiCall({ mode: "strategy", case_id: kid, focus: $("st-focus").value.trim() }); $("st-gen").disabled = false;
+  const r = await aiCall({ mode: "strategy", case_id: kid, focus: $("st-focus").value.trim() }, m => $("st-err").textContent = m); $("st-gen").disabled = false;
   if (r.error) { $("st-err").textContent = r.error; return; }
   $("st-err").textContent = "Strategien er opdateret. Gennemgå den, og ret til under «Redigér»."; loadStrategyView();
 };
@@ -1094,7 +1107,7 @@ $("cq-add").onclick = async () => {
 $("cq-gen").onclick = async () => {
   const kid = $("s-case").value; if (!kid) return;
   $("cq-gen").disabled = true; $("cq-err").textContent = "Robotten finder det, vi skal vide fra kunden … det kan tage et minut.";
-  const r = await aiCall({ mode: "client_questions", case_id: kid, focus: $("cq-focus").value.trim() }); $("cq-gen").disabled = false;
+  const r = await aiCall({ mode: "client_questions", case_id: kid, focus: $("cq-focus").value.trim() }, m => $("cq-err").textContent = m); $("cq-gen").disabled = false;
   $("cq-err").textContent = r.error ? r.error : `${r.added} spørgsmål tilføjet som kladder – kunden kan ikke se dem endnu. Ret dem til, fjern dem du ikke vil stille, og klik «Send kladder til kunden».`;
   loadStrategyView();
 };
