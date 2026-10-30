@@ -513,9 +513,19 @@ async function boot(user){
   show("time");
 }
 document.querySelectorAll("nav button[data-view]").forEach(b => b.onclick = () => show(b.dataset.view));
+// Hent nyeste data, når man vender tilbage til fanen (fx efter robotten har læst filer)
+let lastRefresh = Date.now();
+window.addEventListener("focus", async () => {
+  if (!booted || Date.now() - lastRefresh < 30000) return; lastRefresh = Date.now();
+  await Promise.all([loadCases(), loadDocs()]);
+  if (S.view === "deliver") loadDeliverables(); else if (S.view === "strategy") loadStrategyView(); else if (S.view === "time") loadEntries();
+  updateCqCount();
+});
 function show(v){
   document.querySelectorAll(".view").forEach(s => s.classList.toggle("hidden", s.id !== "v-" + v));
   document.querySelectorAll("nav button[data-view]").forEach(b => b.dataset.view === v ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current"));
+  S.view = v;
+  if (v === "docs") loadDocs();
   if (v === "ai") { loadThreads(); renderDocPick(); }
   if (v === "deliver") loadDeliverables();
   if (v === "strategy") loadStrategyView();
